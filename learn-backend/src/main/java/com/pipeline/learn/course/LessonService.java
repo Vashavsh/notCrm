@@ -56,7 +56,7 @@ public class LessonService {
         Lesson lesson = lesson(lessonId);
         Account account = lock(accountId);
         LessonProgress progress = currentProgress(account.getId(), lessonId);
-        progress.markOpened(Instant.now());
+        progress.markOpened(now());
         progressRepository.save(progress);
         return detail(account, lesson, progress);
     }
@@ -122,7 +122,7 @@ public class LessonService {
         Account account = lock(accountId);
         LessonProgress progress = currentProgress(account.getId(), lessonId);
         Attempt attempt = writableAttempt(progress, data);
-        attempt.markCompleted(Instant.now());
+        attempt.markCompleted(now());
         attemptRepository.save(attempt);
         progress.markCompleted(attempt.getCompletedAt());
         progressRepository.save(progress);
@@ -140,6 +140,11 @@ public class LessonService {
         progress.setCurrentAttemptId(fresh.getId());
         progressRepository.save(progress);
         return detail(account, lesson, progress);
+    }
+
+    /** Postgres keeps microseconds; a nanosecond clock would make one moment read differently before and after saving. */
+    private static Instant now() {
+        return Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     }
 
     // ---- helpers shared with the attachment endpoints ----
