@@ -289,3 +289,47 @@ export interface CuratorWorkload {
   newLast30Days: number
   sharePct: number
 }
+
+/** The "Учебный сайт" tab of a student: login on the course site and progress through the course. */
+export interface LearnAccessDto {
+  /** False until the course site has been set up on the server. */
+  connected: boolean
+  /** Null until access is issued. */
+  account: LearnAccountDto | null
+  progress: LearnProgressDto | null
+}
+
+export interface LearnAccountDto {
+  login: string
+  /** As issued by the CRM; null once the student has set their own password. */
+  password: string | null
+  passwordChangedByStudent: boolean
+  status: 'ACTIVE' | 'CLOSED'
+  issuedAt: string
+  lastSeenAt: string | null
+}
+
+export interface LearnProgressDto {
+  completed: number
+  total: number
+  firstOpenedAt: string | null
+  lastOpenedAt: string | null
+  blocks: LearnBlockDto[]
+}
+
+export interface LearnBlockDto {
+  id: string
+  title: string
+  order: number
+  completed: number
+  total: number
+  lessons: LearnLessonDto[]
+}
+
+export interface LearnLessonDto {
+  id: string
+  title: string
+  order: number
+  openedAt: string | null
+  completedAt: string | null
+}

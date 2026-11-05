@@ -14,7 +14,14 @@ import { studentsApi } from '../../api/students'
 import { formatDate, toDateInputValue } from '../../utils/dates'
 import { StudentComments } from './StudentComments'
 import { StudentHistory } from './StudentHistory'
+import { LearnTab } from './LearnTab'
+import { daysAway, useLearnAccess } from '../../hooks/useLearnAccess'
 import type { StageDto, StudentDto } from '../../types'
+
+const tabClass = (on: boolean) =>
+  `flex items-center gap-1.5 text-[13px] font-semibold px-3 py-2 -mb-px border-b-2 cursor-pointer ${
+    on ? 'text-accent border-accent' : 'text-ink-600 border-transparent hover:text-ink-900'
+  }`
 
 function plannedCompletionLabel(student: StudentDto, stages: StageDto[]): string {
   if (student.isPaused) return 'на паузе'
@@ -46,6 +53,9 @@ export function StudentDetailsModal({
   const { curators, displayName } = useCurators()
   const { cohorts, refetch: refetchCohorts } = useCohorts()
   const { push } = useToast()
+  const learn = useLearnAccess(student.id)
+  const [tab, setTab] = useState<'card' | 'learn'>('card')
+  const away = daysAway(learn.data)
   const isAdmin = user?.role === 'ADMIN'
   const canReassignCurator = isAdmin || !!user?.canReassign
   const canDelete = isAdmin || !!user?.canDeleteStudents
@@ -242,6 +252,26 @@ export function StudentDetailsModal({
       }
       onClose={onClose}
     >
+      <div className="flex gap-0.5 border-b border-border mt-3.5">
+        <button className={tabClass(tab === 'card')} onClick={() => setTab('card')}>
+          Карточка
+        </button>
+        <button className={tabClass(tab === 'learn')} onClick={() => setTab('learn')}>
+          Учебный сайт
+          {away != null && away >= 7 && (
+            <i
+              className={`w-2 h-2 rounded-full ${away >= 14 ? 'bg-warn' : 'bg-amber'}`}
+              title={`Не заходил ${away} дн.`}
+              aria-label={`Не заходил ${away} дн.`}
+            />
+          )}
+        </button>
+      </div>
+
+      {tab === 'learn' ? (
+        <LearnTab student={student} learn={learn} />
+      ) : (
+        <>
       <div className="text-xs font-semibold text-ink-600 uppercase tracking-wide mt-4 mb-2">Куратор</div>
       <div className="flex items-center gap-2 mb-3">
         <Avatar name={cur.name} color={cur.color} />
@@ -357,6 +387,8 @@ export function StudentDetailsModal({
           onConfirm={deleteStudent}
           onClose={() => setConfirmDelete(false)}
         />
+      )}
+        </>
       )}
     </Modal>
   )
