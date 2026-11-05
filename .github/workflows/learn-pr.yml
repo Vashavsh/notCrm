@@ -34,3 +34,25 @@ jobs:
       - name: Test learn-backend
         working-directory: learn-backend
         run: ./mvnw -q -B test
+
+  frontend:
+    name: learn-frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: learn-frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: learn-frontend
+        run: npm ci
+
+      # Type-checks and builds the front end; the course content is not part of the build.
+      - name: Build
+        working-directory: learn-frontend
+        run: npm run build

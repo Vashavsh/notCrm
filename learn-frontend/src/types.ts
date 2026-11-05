@@ -1,0 +1,11 @@
+export type User = { id:string; name:string; email:string|null; login:string; isStaff:boolean; status:string;statusLabel:string;stage:number };
+export type Session = {user:User|null;csrfToken:string};
+export type LessonStatus = 'locked'|'available'|'in_progress'|'completed';
+export type LessonCard = {id:string;title:string;order:number;minutes:number;summary:string;kind:string;status:LessonStatus;answered:number;total:number};
+export type CourseModule = {id:string;stage:number;order:number;title:string;description:string;available:boolean;lessons:LessonCard[]};
+export type Course = {modules:CourseModule[];progress:{completed:number;total:number;resumeLessonId:string|null}};
+export type Question = {type:'question';id:string;number:string;kind:'single'|'multi'|'number'|'open'|'reflection';prompt:string;options?:string[];requiresSelfAssessment?:boolean};
+export type Section = Question|{type:'html';html:string}|{type:'resource';resource:string;title?:string;description?:string};
+export type Lesson = {id:string;moduleId:string;order:number;title:string;summary:string;minutes:number;kind:string;sections:Section[]};
+export type Answer = {value:unknown;correct:boolean|null;feedback:string;selfAssessment?:string;submitted:boolean;attachmentUrl?:string;correctOptions?:number[];correctAnswer?:string|number};
+export type Detail = {lesson:Lesson;attempt:{id:number;answers:Record<string,Answer>;drafts:Record<string,string>;completed:boolean};navigation:{previous:string|null;next:string|null}};
