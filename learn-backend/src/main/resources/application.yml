@@ -1,5 +1,20 @@
 server:
   port: ${SERVER_PORT:8081}
+  # Behind nginx on the same host: listen on loopback only, so X-Forwarded-* headers can only come from nginx.
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  tomcat:
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+  servlet:
+    session:
+      tracking-modes: cookie
+      cookie:
+        name: LEARN_SESSION
+        http-only: true
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}
+        max-age: 90d
 
 spring:
   application:
@@ -11,6 +26,11 @@ spring:
     hikari:
       # Everything this app touches lives in its own schema; it must never resolve a name in the CRM's `public`.
       connection-init-sql: SET search_path TO learn
+  session:
+    # Server-side sessions in learn.spring_session (created by Flyway V2): restarts do not log students out.
+    timeout: 90d
+    jdbc:
+      initialize-schema: never
   jpa:
     hibernate:
       ddl-auto: validate

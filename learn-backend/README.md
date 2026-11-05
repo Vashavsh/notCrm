@@ -6,6 +6,19 @@ Backend of the student course site (learn.shabash-hub.ru). A separate Spring Boo
 - `learn.account` is the bridge: the CRM writes it (issue access, reset password, close access), this app reads it.
 - Course content (lessons, images, Amplitude credentials) is not in git. It will be read from a directory configured by `LEARN_CONTENT_DIR`.
 
+## API (so far)
+
+Same shape as the old course site, so its front end can be reused. Errors are `{"error": text, "code"?: string}`.
+
+| Call | What it does |
+|---|---|
+| `GET /api/session` | `{user \| null, csrfToken}`; the front end sends the token back in the `X-CSRFToken` header on every POST |
+| `POST /api/login` `{login, password}` | starts a session (cookie `LEARN_SESSION`, HttpOnly, 90 days, renewed on every request) |
+| `POST /api/logout` | ends it |
+| `POST /api/change-password` `{currentPassword, newPassword}` | the student's own change; their other sessions end |
+
+A session is checked against the database on every request: when the CRM closes the account or resets the password (bumps `session_version`) the next request answers `403` with `code: "session_revoked"`. Login failures are rate limited per address+login, per address and per login (`LoginRateLimiter`).
+
 ## Run locally
 
 The CRM's local Postgres (`../backend/compose.yaml`, port 5434) can host the `learn` schema too. The app creates the schema itself; for local runs give it a user that may create schemas (the CRM user works):
