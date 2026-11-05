@@ -1,0 +1,10 @@
+[
+  {
+    "id": "fixture-data",
+    "title": "Тестовый набор данных",
+    "stage": 1,
+    "sourcePeriod": "1 янв – 2 янв 2000",
+    "description": "Вымышленные данные для тестов",
+    "fromLesson": 1
+  }
+]

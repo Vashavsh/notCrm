@@ -23,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.pipeline.learn.AbstractIntegrationTest;
+import com.pipeline.learn.TestBrowser;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class StudentLoginIntegrationTest extends AbstractIntegrationTest {
@@ -44,80 +45,6 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
         jdbc.update("delete from spring_session");
     }
 
-    /** A browser: keeps cookies and the CSRF token like the real front end does. */
-    class Browser {
-        final Map<String, String> cookies = new LinkedHashMap<>();
-        final List<String> lastSetCookies = new java.util.ArrayList<>();
-        String csrf;
-
-        ResponseEntity<Map<String, Object>> get(String path) {
-            return send(HttpMethod.GET, path, null);
-        }
-
-        ResponseEntity<Map<String, Object>> post(String path, Object body) {
-            return send(HttpMethod.POST, path, body);
-        }
-
-        ResponseEntity<Map<String, Object>> postWithoutCsrf(String path, Object body) {
-            return exchange(HttpMethod.POST, path, body, false);
-        }
-
-        /** Opens the site: gets the CSRF token. */
-        Browser open() {
-            get("/api/session");
-            return this;
-        }
-
-        Browser loginAs(String login, String password) {
-            open();
-            var response = post("/api/login", Map.of("login", login, "password", password));
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            return this;
-        }
-
-        private ResponseEntity<Map<String, Object>> send(HttpMethod method, String path, Object body) {
-            return exchange(method, path, body, true);
-        }
-
-        private ResponseEntity<Map<String, Object>> exchange(HttpMethod method, String path, Object body, boolean withCsrf) {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            if (!cookies.isEmpty()) {
-                headers.set(HttpHeaders.COOKIE, String.join("; ", cookies.entrySet().stream()
-                        .map(e -> e.getKey() + "=" + e.getValue()).toList()));
-            }
-            if (withCsrf && csrf != null) {
-                headers.set("X-CSRFToken", csrf);
-            }
-            var response = http.exchange(path, method, new HttpEntity<>(body, headers),
-                    new ParameterizedTypeReference<Map<String, Object>>() {
-                    });
-            remember(response.getHeaders());
-            Object token = response.getBody() == null ? null : response.getBody().get("csrfToken");
-            if (token instanceof String s) {
-                csrf = s;
-            }
-            return response;
-        }
-
-        private void remember(HttpHeaders headers) {
-            lastSetCookies.clear();
-            for (String header : headers.getOrEmpty(HttpHeaders.SET_COOKIE)) {
-                lastSetCookies.add(header);
-                String[] nameValue = header.split(";", 2)[0].split("=", 2);
-                if (header.contains("Max-Age=0") || nameValue.length < 2 || nameValue[1].isEmpty()) {
-                    cookies.remove(nameValue[0]);
-                } else {
-                    cookies.put(nameValue[0], nameValue[1]);
-                }
-            }
-        }
-
-        String setCookieFor(String name) {
-            return lastSetCookies.stream().filter(c -> c.startsWith(name + "=")).findFirst().orElse(null);
-        }
-    }
-
     private UUID createAccount(String login) {
         UUID id = UUID.randomUUID();
         jdbc.update("insert into account (id, student_id, login, full_name, password_hash, status) values (?, ?, ?, ?, ?, 'ACTIVE')",
@@ -133,7 +60,7 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void anonymousVisitorGetsATokenAndNoSessionRow() {
-        Browser browser = new Browser();
+        TestBrowser browser = new TestBrowser(http);
         var response = browser.get("/api/session");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -146,7 +73,7 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
     @Test
     void postWithoutCsrfTokenIsRejected() {
         createAccount("csrf_user");
-        Browser browser = new Browser().open();
+        TestBrowser browser = new TestBrowser(http).open();
         var response = browser.postWithoutCsrf("/api/login", Map.of("login", "csrf_user", "password", PASSWORD));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -156,7 +83,7 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
     @Test
     void loginStartsAHttpOnlySessionThatSlidesForNinetyDays() {
         createAccount("slide_user");
-        Browser browser = new Browser().open();
+        TestBrowser browser = new TestBrowser(http).open();
         var login = browser.post("/api/login", Map.of("login", "slide_user", "password", PASSWORD));
 
         assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -173,8 +100,8 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
     @Test
     void wrongPasswordAndUnknownLoginLookTheSame() {
         createAccount("same_user");
-        Browser a = new Browser().open();
-        Browser b = new Browser().open();
+        TestBrowser a = new TestBrowser(http).open();
+        TestBrowser b = new TestBrowser(http).open();
         var wrong = a.post("/api/login", Map.of("login", "same_user", "password", "wrong-password-12"));
         var unknown = b.post("/api/login", Map.of("login", "nobody_here", "password", "wrong-password-12"));
 
@@ -186,14 +113,14 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
     @Test
     void loginIgnoresCaseAndSurroundingSpaces() {
         createAccount("Case_User");
-        Browser browser = new Browser().open();
+        TestBrowser browser = new TestBrowser(http).open();
         var response = browser.post("/api/login", Map.of("login", "  case_USER ", "password", PASSWORD));
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
     void protectedEndpointsNeedLogin() {
-        var response = new Browser().get("/api/course");
+        var response = new TestBrowser(http).get("/api/course");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody()).containsEntry("error", "Войдите в аккаунт.");
         assertThat(jdbc.queryForObject("select count(*) from spring_session", Integer.class)).isZero();
@@ -203,7 +130,7 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
     void closedAccountCannotLogIn() {
         UUID id = createAccount("closed_user");
         jdbc.update("update account set status = 'CLOSED' where id = ?", id);
-        Browser browser = new Browser().open();
+        TestBrowser browser = new TestBrowser(http).open();
         var response = browser.post("/api/login", Map.of("login", "closed_user", "password", PASSWORD));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -213,7 +140,7 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
     @Test
     void closingAccessCutsOffAnOpenSessionOnItsNextRequest() {
         UUID id = createAccount("cut_user");
-        Browser browser = new Browser().loginAs("cut_user", PASSWORD);
+        TestBrowser browser = new TestBrowser(http).loginAs("cut_user", PASSWORD);
         assertThat(userOf(browser.get("/api/session"))).isNotNull();
 
         jdbc.update("update account set status = 'CLOSED' where id = ?", id);
@@ -230,23 +157,23 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
     @Test
     void passwordResetFromTheCrmCutsOffOldSessions() {
         UUID id = createAccount("reset_user");
-        Browser old = new Browser().loginAs("reset_user", PASSWORD);
+        TestBrowser old = new TestBrowser(http).loginAs("reset_user", PASSWORD);
 
         // What the CRM does on "reset password": new hash and a bumped session version.
         jdbc.update("update account set password_hash = ?, session_version = session_version + 1 where id = ?",
                 encoder.encode("maple-comet-lemon-63"), id);
 
         assertThat(old.get("/api/session").getBody()).containsEntry("code", "session_revoked");
-        assertThat(new Browser().open().post("/api/login", Map.of("login", "reset_user", "password", PASSWORD))
+        assertThat(new TestBrowser(http).open().post("/api/login", Map.of("login", "reset_user", "password", PASSWORD))
                 .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        new Browser().loginAs("reset_user", "maple-comet-lemon-63");
+        new TestBrowser(http).loginAs("reset_user", "maple-comet-lemon-63");
     }
 
     @Test
     void studentChangesOwnPasswordAndOtherSessionsEnd() {
         createAccount("change_user");
-        Browser laptop = new Browser().loginAs("change_user", PASSWORD);
-        Browser phone = new Browser().loginAs("change_user", PASSWORD);
+        TestBrowser laptop = new TestBrowser(http).loginAs("change_user", PASSWORD);
+        TestBrowser phone = new TestBrowser(http).loginAs("change_user", PASSWORD);
 
         var wrongCurrent = laptop.post("/api/change-password", Map.of("currentPassword", "nope-nope-nope", "newPassword", "birch-plum-otter-81"));
         assertThat(wrongCurrent.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -264,15 +191,15 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
         assertThat(userOf(laptop.get("/api/session"))).containsEntry("login", "change_user");
         assertThat(phone.get("/api/session").getBody()).containsEntry("code", "session_revoked");
 
-        assertThat(new Browser().open().post("/api/login", Map.of("login", "change_user", "password", PASSWORD))
+        assertThat(new TestBrowser(http).open().post("/api/login", Map.of("login", "change_user", "password", PASSWORD))
                 .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        new Browser().loginAs("change_user", "birch-plum-otter-81");
+        new TestBrowser(http).loginAs("change_user", "birch-plum-otter-81");
     }
 
     @Test
     void tooManyWrongPasswordsLockTheLoginEvenForTheRightPassword() {
         createAccount("lock_user");
-        Browser browser = new Browser().open();
+        TestBrowser browser = new TestBrowser(http).open();
         for (int i = 0; i < 8; i++) {
             assertThat(browser.post("/api/login", Map.of("login", "lock_user", "password", "wrong-password-" + i))
                     .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -284,7 +211,7 @@ class StudentLoginIntegrationTest extends AbstractIntegrationTest {
     @Test
     void logoutEndsTheSession() {
         createAccount("bye_user");
-        Browser browser = new Browser().loginAs("bye_user", PASSWORD);
+        TestBrowser browser = new TestBrowser(http).loginAs("bye_user", PASSWORD);
         var out = browser.post("/api/logout", Map.of());
         assertThat(out.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(browser.get("/api/session").getBody().get("user")).isNull();

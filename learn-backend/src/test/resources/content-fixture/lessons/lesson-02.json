@@ -1,0 +1,13 @@
+{
+  "id": "lesson-02",
+  "moduleId": "block-2",
+  "order": 2,
+  "title": "Второй тестовый урок",
+  "summary": "Короткий урок из другого блока.",
+  "minutes": 5,
+  "kind": "practice",
+  "sections": [
+    {"type": "html", "html": "<p>Второй урок.</p>"},
+    {"type": "question", "id": "t02-q1", "number": "2.1", "kind": "single", "prompt": "Один из двух.", "options": ["Да", "Нет"], "correct": [0], "feedback": "<p>Ок.</p>"}
+  ]
+}
