@@ -1,0 +1,127 @@
+name: Deploy course site
+
+# Ships learn-backend and learn-frontend to the server, independently of the CRM (deploy.yml ignores these paths).
+# It stays switched off until the server is prepared: see learn-backend/deploy/README.md. To switch it on set the
+# repository variable LEARN_DEPLOY_ENABLED to true and fill LEARN_SSH_HOST, LEARN_SSH_USER and LEARN_SSH_HOST_KEY.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'learn-backend/**'
+      - 'learn-frontend/**'
+      - '.github/workflows/learn-deploy.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: learn-deploy
+  cancel-in-progress: false
+
+env:
+  PUBLIC_HOST: learn.shabash-hub.ru
+
+jobs:
+  deploy:
+    if: vars.LEARN_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ vars.LEARN_SSH_HOST }}
+      SSH_USER: ${{ vars.LEARN_SSH_USER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: learn-backend/pom.xml
+
+      - name: Test back end
+        working-directory: learn-backend
+        run: ./mvnw -q -B test
+
+      - name: Build back end
+        working-directory: learn-backend
+        run: ./mvnw -q -B -DskipTests package
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: learn-frontend/package-lock.json
+
+      - name: Build front end
+        working-directory: learn-frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # The server's public host key is pinned in a repository variable (a line like "<host> ssh-ed25519 AAAA...").
+          echo "${{ vars.LEARN_SSH_HOST_KEY }}" > ~/.ssh/known_hosts
+
+      - name: Upload build artifacts
+        run: |
+          RELEASE_ID="${{ github.sha }}-$(date +%s)"
+          BACKEND_JAR=$(ls learn-backend/target/*.jar | grep -v original | head -1)
+          scp -i ~/.ssh/deploy_key "$BACKEND_JAR" "$SSH_USER@$SSH_HOST:/opt/pipeline-learn/releases/learn-${RELEASE_ID}.jar"
+          scp -i ~/.ssh/deploy_key -r learn-frontend/dist "$SSH_USER@$SSH_HOST:/opt/pipeline-learn/frontend/releases/dist-${RELEASE_ID}"
+          echo "RELEASE_ID=${RELEASE_ID}" >> "$GITHUB_ENV"
+
+      - name: Activate release, restart, and roll back on failure
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" bash -s <<EOF
+            set -e
+            PREV_JAR=\$(readlink -f /opt/pipeline-learn/current.jar 2>/dev/null || true)
+            PREV_FRONTEND=\$(readlink -f /opt/pipeline-learn/frontend/current 2>/dev/null || true)
+
+            ln -sfn /opt/pipeline-learn/releases/learn-${RELEASE_ID}.jar /opt/pipeline-learn/current.jar
+            ln -sfn /opt/pipeline-learn/frontend/releases/dist-${RELEASE_ID} /opt/pipeline-learn/frontend/current
+            sudo systemctl restart pipeline-learn
+
+            # The app checks the whole course (and migrates its schema) before it answers, so allow a minute.
+            for i in \$(seq 1 30); do
+              sleep 2
+              if curl -sf http://127.0.0.1:8081/api/health >/dev/null; then
+                echo "Course site healthy on the new release"
+                exit 0
+              fi
+            done
+
+            echo "New release failed to become healthy, rolling back" >&2
+            if [ -n "\$PREV_JAR" ] && [ -f "\$PREV_JAR" ]; then
+              ln -sfn "\$PREV_JAR" /opt/pipeline-learn/current.jar
+              [ -n "\$PREV_FRONTEND" ] && ln -sfn "\$PREV_FRONTEND" /opt/pipeline-learn/frontend/current
+              sudo systemctl restart pipeline-learn
+              sleep 10
+              curl -sf http://127.0.0.1:8081/api/health >/dev/null && echo "Rolled back to the previous release" >&2 || echo "Rollback did not come up healthy: needs attention" >&2
+            else
+              echo "No previous release to roll back to" >&2
+            fi
+            exit 1
+          EOF
+
+      - name: Prune old releases (keep last 5)
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" '
+            cd /opt/pipeline-learn/releases && ls -t learn-*.jar | tail -n +6 | xargs -r rm -f
+            cd /opt/pipeline-learn/frontend/releases && ls -td dist-* | tail -n +6 | xargs -r rm -rf
+          '
+
+      - name: Verify externally
+        run: |
+          for i in $(seq 1 6); do
+            if curl -sf "https://$PUBLIC_HOST/api/health" >/dev/null; then
+              echo "Reachable at https://$PUBLIC_HOST"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Not reachable from outside: check DNS, nginx and the certificate" >&2
+          exit 1
