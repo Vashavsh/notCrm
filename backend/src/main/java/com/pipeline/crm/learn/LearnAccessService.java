@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import com.pipeline.crm.audit.AuditService;
 import com.pipeline.crm.common.exception.ConflictException;
 import com.pipeline.crm.security.CurrentUser;
 import com.pipeline.crm.student.Student;
+import com.pipeline.crm.student.StudentDeleted;
 import com.pipeline.crm.student.StudentService;
 
 import lombok.RequiredArgsConstructor;
@@ -70,6 +72,40 @@ public class LearnAccessService {
         save(studentId, account.login(), password, hash, user.id(), Instant.now(), false);
         audit.log(user.id(), "student_learn_access", studentId, "reset_password", null, Map.of("login", account.login()));
         return view(studentId);
+    }
+
+    /** Closes the student's access: they cannot log in and every open session ends on its next request. Closing twice is harmless. */
+    @Transactional
+    public LearnAccessDto close(UUID studentId, CurrentUser user) {
+        students.requireAccessible(studentId, user);
+        bridge.requireAvailable();
+        LearnBridge.Account account = bridge.account(studentId).orElseThrow(() -> new ConflictException("Access has not been issued yet"));
+        if (bridge.close(studentId) > 0) {
+            audit.log(user.id(), "student_learn_access", studentId, "close_access", null, Map.of("login", account.login()));
+        }
+        return view(studentId);
+    }
+
+    @Transactional
+    public LearnAccessDto reopen(UUID studentId, CurrentUser user) {
+        students.requireAccessible(studentId, user);
+        bridge.requireAvailable();
+        LearnBridge.Account account = bridge.account(studentId).orElseThrow(() -> new ConflictException("Access has not been issued yet"));
+        if (bridge.reopen(studentId) > 0) {
+            audit.log(user.id(), "student_learn_access", studentId, "reopen_access", null, Map.of("login", account.login()));
+        }
+        return view(studentId);
+    }
+
+    /**
+     * A deleted student must not keep a working login. Runs in the deleting transaction; does nothing when the course site is
+     * not set up or the student never had access.
+     */
+    @EventListener
+    public void onStudentDeleted(StudentDeleted event) {
+        if (bridge.available() && bridge.close(event.studentId()) > 0) {
+            audit.log(event.actorId(), "student_learn_access", event.studentId(), "close_access", null, Map.of("reason", "student deleted"));
+        }
     }
 
     private void save(UUID studentId, String login, String password, String hash, UUID actorId, Instant now, boolean isNew) {

@@ -70,6 +70,17 @@ public class LearnBridge {
                 passwordHash, studentId);
     }
 
+    /** Closes access; the bumped version ends every open session. Returns 0 when there was nothing to close. */
+    public int close(UUID studentId) {
+        return jdbc.update("update learn.account set status = 'CLOSED', session_version = session_version + 1, updated_at = now() "
+                + "where student_id = ? and status <> 'CLOSED'", studentId);
+    }
+
+    /** Opens access again; sessions closed earlier stay dead (their version is old), the student logs in anew. */
+    public int reopen(UUID studentId) {
+        return jdbc.update("update learn.account set status = 'ACTIVE', updated_at = now() where student_id = ? and status = 'CLOSED'", studentId);
+    }
+
     public List<LessonRow> progress(UUID studentId) {
         return jdbc.query("select lesson_id, module_id, module_title, module_order, lesson_order, lesson_title, opened_at, last_opened_at, completed_at "
                 + "from learn.v_student_progress where student_id = ? order by module_order, lesson_order",

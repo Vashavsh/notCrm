@@ -63,10 +63,24 @@ function CopyRow({ label, value, onCopy }: { label: string; value: string; onCop
   )
 }
 
-function AccessBlock({ account, busy, onReset }: { account: LearnAccountDto; busy: boolean; onReset: () => void }) {
+function AccessBlock({
+  account,
+  busy,
+  onReset,
+  onClose,
+  onReopen,
+}: {
+  account: LearnAccountDto
+  busy: boolean
+  onReset: () => void
+  onClose: () => void
+  onReopen: () => void
+}) {
   const { push } = useToast()
   const [showMessage, setShowMessage] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const closed = account.status === 'CLOSED'
 
   async function copy(text: string, what: string) {
     try {
@@ -106,6 +120,11 @@ function AccessBlock({ account, busy, onReset }: { account: LearnAccountDto; bus
         )}
       </div>
 
+      {closed && (
+        <div className="mt-2.5 text-xs rounded-lg px-2.5 py-2 bg-warn-soft text-warn">
+          Доступ закрыт: ученик не может войти на сайт, открытые сессии завершены. Нажмите «Открыть снова», когда нужно.
+        </div>
+      )}
       <div className="mt-2.5 text-xs rounded-lg px-2.5 py-2 bg-amber-soft text-amber">
         {account.password
           ? 'Пароль виден, пока ученик не сменит его сам. Потом уберём, когда доступы начнёт отправлять бот.'
@@ -113,10 +132,16 @@ function AccessBlock({ account, busy, onReset }: { account: LearnAccountDto; bus
       </div>
 
       <div className="flex gap-2 mt-3">
-        {account.password && (
-          <button className="btn-primary flex-1" onClick={() => copy(messageFor(account), 'Сообщение')}>
-            Скопировать сообщение
+        {closed ? (
+          <button className="btn-primary flex-1" disabled={busy} onClick={onReopen}>
+            Открыть снова
           </button>
+        ) : (
+          account.password && (
+            <button className="btn-primary flex-1" onClick={() => copy(messageFor(account), 'Сообщение')}>
+              Скопировать сообщение
+            </button>
+          )
         )}
         <button className="btn-ghost flex-1" disabled={busy} onClick={() => setConfirmReset(true)}>
           Сбросить пароль
@@ -133,6 +158,25 @@ function AccessBlock({ account, busy, onReset }: { account: LearnAccountDto; bus
             </pre>
           )}
         </>
+      )}
+
+      {!closed && (
+        <div className="mt-3 flex justify-end">
+          <button className="text-xs font-semibold text-warn underline" disabled={busy} onClick={() => setConfirmClose(true)}>
+            Закрыть доступ
+          </button>
+        </div>
+      )}
+
+      {confirmClose && (
+        <ConfirmDialog
+          title="Закрыть доступ?"
+          message="Ученик больше не сможет войти на учебный сайт, а открытые у него страницы перестанут работать при следующем действии. Прогресс сохранится, доступ можно открыть снова."
+          confirmLabel="Закрыть доступ"
+          danger
+          onConfirm={onClose}
+          onClose={() => setConfirmClose(false)}
+        />
       )}
 
       {confirmReset && (
@@ -254,7 +298,7 @@ export function LearnTab({ student, learn }: { student: StudentDto; learn: Retur
   const progress = data.progress
   return (
     <>
-      <AccessBlock account={data.account} busy={busy} onReset={learn.resetPassword} />
+      <AccessBlock account={data.account} busy={busy} onReset={learn.resetPassword} onClose={learn.close} onReopen={learn.reopen} />
       {progress && progress.total > 0 && data.account.lastSeenAt ? (
         <ProgressBlock account={data.account} progress={progress} />
       ) : (

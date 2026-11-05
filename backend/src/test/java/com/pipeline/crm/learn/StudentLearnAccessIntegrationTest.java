@@ -239,6 +239,75 @@ class StudentLearnAccessIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
+    // ---- closing and reopening ----
+
+    @Test
+    void closingAccessLocksTheStudentOutAndReopeningLetsThemBackIn() throws Exception {
+        UUID student = createStudent("Кира Седова", "@kira_s");
+        postJson("/api/v1/students/" + student + "/learn/issue", curator, 200);
+
+        JsonNode closed = postJson("/api/v1/students/" + student + "/learn/close", curator, 200);
+        assertThat(closed.get("account").get("status").asText()).isEqualTo("CLOSED");
+        Map<String, Object> row = jdbc.queryForMap("select status, session_version from learn.account where student_id = ?", student);
+        assertThat(row).containsEntry("status", "CLOSED").containsEntry("session_version", 1);
+
+        // Closing again changes nothing and is not logged twice.
+        postJson("/api/v1/students/" + student + "/learn/close", curator, 200);
+        assertThat(jdbc.queryForObject("select session_version from learn.account where student_id = ?", Integer.class, student)).isEqualTo(1);
+        assertThat(jdbc.queryForList("select action from audit_log where entity_id = ? and entity_type = 'student_learn_access' order by created_at", String.class, student))
+                .containsExactly("issue", "close_access");
+
+        JsonNode reopened = postJson("/api/v1/students/" + student + "/learn/reopen", curator, 200);
+        assertThat(reopened.get("account").get("status").asText()).isEqualTo("ACTIVE");
+        // The password is still the one issued; sessions that were open before the closing stay ended (version 1).
+        assertThat(reopened.get("account").get("password").asText()).matches(PASSWORD_FORMAT);
+        assertThat(jdbc.queryForObject("select session_version from learn.account where student_id = ?", Integer.class, student)).isEqualTo(1);
+    }
+
+    @Test
+    void closingNeedsIssuedAccessAndTheRightToSeeTheStudent() throws Exception {
+        UUID student = createStudent("Лев Орлов", "@lev_o");
+        postJson("/api/v1/students/" + student + "/learn/close", admin, 409);
+        postJson("/api/v1/students/" + student + "/learn/reopen", admin, 409);
+
+        postJson("/api/v1/students/" + student + "/learn/issue", admin, 200);
+        mockMvc.perform(post("/api/v1/students/" + student + "/learn/close").header("Authorization", "Bearer " + otherCurator))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/students/" + student + "/learn/reopen").header("Authorization", "Bearer " + otherCurator))
+                .andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("select status from learn.account where student_id = ?", String.class, student)).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void deletingAStudentClosesTheirAccess() throws Exception {
+        UUID student = createStudent("Мила Фёдорова", "@mila_f");
+        postJson("/api/v1/students/" + student + "/learn/issue", admin, 200);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/students/" + student)
+                .header("Authorization", "Bearer " + admin)).andExpect(status().isNoContent());
+
+        Map<String, Object> row = jdbc.queryForMap("select status, session_version from learn.account where student_id = ?", student);
+        assertThat(row).containsEntry("status", "CLOSED").containsEntry("session_version", 1);
+        assertThat(jdbc.queryForList("select action from audit_log where entity_id = ? and entity_type = 'student_learn_access' order by created_at", String.class, student))
+                .containsExactly("issue", "close_access");
+    }
+
+    @Test
+    void deletingAStudentWithoutAccessOrWithoutTheCourseSiteStillWorks() throws Exception {
+        UUID withoutAccess = createStudent("Нина Зотова", "@nina_z");
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/students/" + withoutAccess)
+                .header("Authorization", "Bearer " + admin)).andExpect(status().isNoContent());
+
+        UUID student = createStudent("Олег Рябов", "@oleg_r");
+        jdbc.execute("alter schema learn rename to learn_parked");
+        try {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/students/" + student)
+                    .header("Authorization", "Bearer " + admin)).andExpect(status().isNoContent());
+        } finally {
+            jdbc.execute("alter schema learn_parked rename to learn");
+        }
+    }
+
     // ---- helpers ----
 
     private UUID createStudent(String name, String telegram) throws Exception {

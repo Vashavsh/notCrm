@@ -8,4 +8,8 @@ export const learnApi = {
 
   resetPassword: (studentId: string) =>
     client.post<LearnAccessDto>(`/students/${studentId}/learn/reset-password`).then((r) => r.data),
+
+  close: (studentId: string) => client.post<LearnAccessDto>(`/students/${studentId}/learn/close`).then((r) => r.data),
+
+  reopen: (studentId: string) => client.post<LearnAccessDto>(`/students/${studentId}/learn/reopen`).then((r) => r.data),
 }
