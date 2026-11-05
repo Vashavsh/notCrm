@@ -24,6 +24,18 @@ Same shape as the old course site, so its front end can be reused. Errors are `{
 
 A session is checked against the database on every request: when the CRM closes the account or resets the password (bumps `session_version`) the next request answers `403` with `code: "session_revoked"`. Login failures are rate limited per address+login, per address and per login (`LoginRateLimiter`).
 
+## The bridge to the CRM
+
+The CRM and this app share one Postgres and nothing else. The only objects the CRM touches in schema `learn`:
+
+| Object | CRM does | Meaning |
+|---|---|---|
+| `account` | inserts a row to issue access; updates `password_hash` + `session_version` to reset a password; updates `status` + `session_version` to close/reopen access | the student's login; a bumped `session_version` ends all their open sessions on the next request |
+| `v_student_progress` | reads | one row per (student with an account) x (lesson): opened / last opened / passed |
+| `lesson_catalog` | reads (through the view) | the lesson list of the course, copied from the content at every startup (`CatalogSync`) |
+
+Change these only by adding (columns, views), never by renaming or removing: either side may be rolled back independently. This app never reads the CRM's tables.
+
 ## Course content
 
 Not in git. `LEARN_CONTENT_DIR` points at a directory with `lessons/lesson-NN.json`, `stages.json`, `resources.json` and `images/`; `LEARN_SECRETS_DIR` at a directory with one `<resource id>.json` per external resource (the shared Amplitude logins). The app checks the content at startup (unique lesson and question ids, correct answers inside the options, known resources, every block listed in `stages.json`) and **refuses to start** if anything is wrong, so a bad content deploy fails the health check and is rolled back. Question and lesson ids must never change: progress is stored against them.
