@@ -9,7 +9,7 @@ public abstract class AbstractIntegrationTest {
     static final PostgreSQLContainer<?> POSTGRES;
 
     static {
-        POSTGRES = new PostgreSQLContainer<>("postgres:16")
+        POSTGRES = new PostgreSQLContainer<>("postgres:18")
                 .withDatabaseName("pipeline_crm_test")
                 .withUsername("test_user")
                 .withPassword("test_pass");
