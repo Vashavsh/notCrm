@@ -26,6 +26,11 @@ spring:
     hikari:
       # Everything this app touches lives in its own schema; it must never resolve a name in the CRM's `public`.
       connection-init-sql: SET search_path TO learn
+  servlet:
+    multipart:
+      # The application itself refuses images over 6 MB with a readable message; these limits only stop abuse.
+      max-file-size: 7MB
+      max-request-size: 8MB
   session:
     # Server-side sessions in learn.spring_session (created by Flyway V2): restarts do not log students out.
     timeout: 90d

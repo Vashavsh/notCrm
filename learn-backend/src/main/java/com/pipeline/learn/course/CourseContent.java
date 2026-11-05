@@ -80,6 +80,12 @@ public class CourseContent {
 
         List<Lesson> loaded = readLessons(root.resolve("lessons"), json, problems);
         validate(loaded, resourceIds, problems);
+        for (String reference : assetReferences) {
+            Path file = imagesDir.resolve(reference.substring("/assets/course/".length())).normalize();
+            if (!file.startsWith(imagesDir) || !Files.isRegularFile(file)) {
+                problems.add("lessons refer to " + reference + " but images/ has no such file");
+            }
+        }
         if (!problems.isEmpty()) {
             throw new IllegalStateException("Course content in " + root + " is invalid:\n  - "
                     + String.join("\n  - ", problems.stream().limit(25).toList())
