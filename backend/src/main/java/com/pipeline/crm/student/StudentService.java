@@ -177,6 +177,7 @@ public class StudentService {
         studentRepository.save(student);
         avatarRepository.deleteById(id);
         auditService.log(user.id(), "student", id, "delete", null, Map.of("fullName", student.getFullName()));
+        events.publishEvent(new StudentDeleted(id, user.id()));
     }
 
     @Transactional

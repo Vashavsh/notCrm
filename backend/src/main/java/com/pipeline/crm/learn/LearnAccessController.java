@@ -36,6 +36,16 @@ public class LearnAccessController {
         return service.resetPassword(studentId, actor());
     }
 
+    @PostMapping("/close")
+    public LearnAccessDto close(@PathVariable UUID studentId) {
+        return service.close(studentId, actor());
+    }
+
+    @PostMapping("/reopen")
+    public LearnAccessDto reopen(@PathVariable UUID studentId) {
+        return service.reopen(studentId, actor());
+    }
+
     private CurrentUser actor() {
         return securityUtils.currentUser();
     }

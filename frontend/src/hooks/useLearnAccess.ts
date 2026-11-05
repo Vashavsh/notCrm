@@ -53,6 +53,8 @@ export function useLearnAccess(studentId: string) {
     reload: load,
     issue: () => act(learnApi.issue, 'Доступ выдан'),
     resetPassword: () => act(learnApi.resetPassword, 'Новый пароль создан'),
+    close: () => act(learnApi.close, 'Доступ закрыт'),
+    reopen: () => act(learnApi.reopen, 'Доступ открыт снова'),
   }
 }
 
