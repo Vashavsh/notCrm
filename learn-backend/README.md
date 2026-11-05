@@ -19,6 +19,12 @@ Same shape as the old course site, so its front end can be reused. Errors are `{
 
 A session is checked against the database on every request: when the CRM closes the account or resets the password (bumps `session_version`) the next request answers `403` with `code: "session_revoked"`. Login failures are rate limited per address+login, per address and per login (`LoginRateLimiter`).
 
+## Course content
+
+Not in git. `LEARN_CONTENT_DIR` points at a directory with `lessons/lesson-NN.json`, `stages.json`, `resources.json` and `images/`; `LEARN_SECRETS_DIR` at a directory with one `<resource id>.json` per external resource (the shared Amplitude logins). The app checks the content at startup (unique lesson and question ids, correct answers inside the options, known resources, every block listed in `stages.json`) and **refuses to start** if anything is wrong, so a bad content deploy fails the health check and is rolled back. Question and lesson ids must never change: progress is stored against them.
+
+On the developer's machine the real content lives next to the repo in `../notCrm-local-data/learn-content`. Tests use a small fictional course in `src/test/resources/content-fixture`; `RealCourseContentTest` checks the real one when `LEARN_REAL_CONTENT_DIR` is set.
+
 ## Run locally
 
 The CRM's local Postgres (`../backend/compose.yaml`, port 5434) can host the `learn` schema too. The app creates the schema itself; for local runs give it a user that may create schemas (the CRM user works):
@@ -26,6 +32,7 @@ The CRM's local Postgres (`../backend/compose.yaml`, port 5434) can host the `le
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21 PATH="/opt/homebrew/opt/openjdk@21/bin:$PATH"
 export DB_URL=jdbc:postgresql://localhost:5434/pipeline_crm DB_USERNAME=pipeline_user DB_PASSWORD=<local password>
+export LEARN_CONTENT_DIR="$PWD/../../notCrm-local-data/learn-content"   # adjust for your checkout/worktree
 ./mvnw spring-boot:run
 curl http://localhost:8081/api/health   # {"status":"ok"}
 ```

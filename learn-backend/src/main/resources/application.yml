@@ -47,3 +47,8 @@ spring:
     schemas: learn
     default-schema: learn
     create-schemas: true
+
+learn:
+  # Both live outside the repository. The app refuses to start when the content is missing or invalid.
+  content-dir: ${LEARN_CONTENT_DIR:}
+  secrets-dir: ${LEARN_SECRETS_DIR:}

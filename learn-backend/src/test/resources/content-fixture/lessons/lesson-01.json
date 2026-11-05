@@ -1,0 +1,19 @@
+{
+  "id": "lesson-01",
+  "moduleId": "block-1",
+  "order": 1,
+  "title": "Первый тестовый урок",
+  "summary": "Вымышленный урок со всеми типами заданий.",
+  "minutes": 10,
+  "kind": "theory",
+  "sections": [
+    {"type": "html", "html": "<h2>Привет, Анон!</h2><p>Это вымышленный урок. Анонимный текст не меняется.</p><figure><img src=\"/assets/course/fixture-chart.png\" alt=\"график\"></figure>"},
+    {"type": "question", "id": "t01-q1", "number": "1.1", "kind": "single", "prompt": "Выберите <b>второй</b> вариант, Анон.", "options": ["Первый", "Второй", "Третий"], "correct": [1], "feedback": "<p>Верно, Анон.</p>", "wrongFeedback": "<p>Подумайте ещё.</p>"},
+    {"type": "question", "id": "t01-q2", "number": "1.2", "kind": "multi", "prompt": "Выберите первый и третий.", "options": ["Один", "Два", "Три", "Четыре"], "correct": [0, 2], "feedback": "<p>Да.</p>"},
+    {"type": "question", "id": "t01-q3", "number": "1.3", "kind": "number", "prompt": "Сколько будет 25 / 2?", "answer": 12.5, "tolerance": 0.01, "feedback": "<p>Разбор: 25 делим на 2.</p>"},
+    {"type": "question", "id": "t01-q4", "number": "1.4", "kind": "open", "prompt": "Опишите вывод и приложите график.", "requiresSelfAssessment": true, "feedback": "<p>Образец ответа.</p>"},
+    {"type": "question", "id": "t01-q5", "number": "1.5", "kind": "open", "prompt": "Свободный ответ без самооценки.", "feedback": "<p>Комментарий.</p>"},
+    {"type": "question", "id": "t01-q6", "number": "1.6", "kind": "reflection", "prompt": "Как вам урок?", "options": ["Понятно", "Сложно", "Скучно"], "feedback": "<p>Спасибо.</p>"},
+    {"type": "resource", "resource": "fixture-data", "title": "Данные к уроку", "description": "Откройте набор данных."}
+  ]
+}
