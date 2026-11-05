@@ -52,6 +52,9 @@ spring:
     schemas: learn
     default-schema: learn
     create-schemas: true
+    placeholders:
+      # The CRM's database role, which V5 gives its rights on the bridge (nothing is granted if the role does not exist).
+      crm_role: ${LEARN_CRM_DB_ROLE:pipeline_user}
 
 learn:
   # Both live outside the repository. The app refuses to start when the content is missing or invalid.

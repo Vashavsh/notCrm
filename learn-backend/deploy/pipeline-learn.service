@@ -1,0 +1,25 @@
+[Unit]
+Description=Pipeline course site (learn-backend)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+User=pipeline-learn
+Group=pipeline-learn
+EnvironmentFile=/etc/pipeline-learn.env
+# The jar is swapped by the deploy workflow through this symlink.
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -jar /opt/pipeline-learn/current.jar
+Restart=on-failure
+RestartSec=5
+# Keeps a runaway process from starving the CRM and the database that share this machine.
+MemoryMax=640M
+# The app reads the course content and the shared logins and writes nothing to disk.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/opt/pipeline-learn
+ReadOnlyPaths=/var/lib/pipeline-learn
+
+[Install]
+WantedBy=multi-user.target
