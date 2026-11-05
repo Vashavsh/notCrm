@@ -3,6 +3,11 @@ name: Deploy to production
 on:
   push:
     branches: [main]
+    # The student course site ships through its own workflow; changes that only touch it must not redeploy the CRM.
+    paths-ignore:
+      - 'learn-backend/**'
+      - 'learn-frontend/**'
+      - '.github/workflows/learn-*.yml'
   workflow_dispatch: {}
 
 env:
